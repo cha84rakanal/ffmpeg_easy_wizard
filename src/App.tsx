@@ -34,6 +34,16 @@ import { codecOptions } from './codecOptions'
 import './App.css'
 
 const steps = ['ファイル選択', 'コーデック指定', '拡張子指定']
+const pixelFormatOptions = [
+  { id: 'yuv420p', label: 'yuv420p (汎用)' },
+  { id: 'yuv422p', label: 'yuv422p' },
+  { id: 'yuv444p', label: 'yuv444p' },
+  { id: 'yuv420p10le', label: 'yuv420p10le (10-bit)' },
+  { id: 'yuv422p10le', label: 'yuv422p10le (10-bit)' },
+  { id: 'yuv444p10le', label: 'yuv444p10le (10-bit)' },
+  { id: 'nv12', label: 'nv12' },
+  { id: 'p010le', label: 'p010le (10-bit)' },
+]
 
 const theme = createTheme({
   palette: {
@@ -73,6 +83,7 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedCodecId, setSelectedCodecId] = useState('')
   const [selectedExtension, setSelectedExtension] = useState('')
+  const [selectedPixelFormat, setSelectedPixelFormat] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -136,6 +147,7 @@ function App() {
     setSelectedFile(null)
     setSelectedCodecId('')
     setSelectedExtension('')
+    setSelectedPixelFormat('')
     setIsDragging(false)
   }
 
@@ -145,8 +157,9 @@ function App() {
     if (!selectedFile || !currentCodec || !selectedExtension) return ''
     const inputName = getFileDisplayName(selectedFile)
     const outputName = getOutputName(inputName, selectedExtension)
-    return `ffmpeg -i "${inputName}" -c:v ${currentCodec.ffmpeg} -c:a copy "${outputName}"`
-  }, [currentCodec, selectedExtension, selectedFile])
+    const pixFmt = selectedPixelFormat ? ` -pix_fmt ${selectedPixelFormat}` : ''
+    return `ffmpeg -i "${inputName}" -c:v ${currentCodec.ffmpeg}${pixFmt} -c:a copy "${outputName}"`
+  }, [currentCodec, selectedExtension, selectedFile, selectedPixelFormat])
 
   const stepValidations = [
     Boolean(selectedFile),
@@ -279,23 +292,42 @@ function App() {
             )}
 
             {activeStep === 1 && (
-              <FormControl fullWidth>
-                <InputLabel id="codec-label">変換コーデック</InputLabel>
-                <Select
-                  labelId="codec-label"
-                  label="変換コーデック"
-                  value={selectedCodecId}
-                  onChange={(event) =>
-                    setSelectedCodecId(event.target.value as string)
-                  }
-                >
-                  {allowedCodecs.map((codec) => (
-                    <MenuItem key={codec.id} value={codec.id}>
-                      {codec.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Stack spacing={2}>
+                <FormControl fullWidth>
+                  <InputLabel id="codec-label">変換コーデック</InputLabel>
+                  <Select
+                    labelId="codec-label"
+                    label="変換コーデック"
+                    value={selectedCodecId}
+                    onChange={(event) =>
+                      setSelectedCodecId(event.target.value as string)
+                    }
+                  >
+                    {allowedCodecs.map((codec) => (
+                      <MenuItem key={codec.id} value={codec.id}>
+                        {codec.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel id="pixfmt-label">ピクセルフォーマット</InputLabel>
+                  <Select
+                    labelId="pixfmt-label"
+                    label="ピクセルフォーマット"
+                    value={selectedPixelFormat}
+                    onChange={(event) =>
+                      setSelectedPixelFormat(event.target.value as string)
+                    }
+                  >
+                    {pixelFormatOptions.map((fmt) => (
+                      <MenuItem key={fmt.id} value={fmt.id}>
+                        {fmt.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
             )}
 
             {activeStep === 2 && (
