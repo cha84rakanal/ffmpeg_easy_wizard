@@ -41,9 +41,41 @@ const pixelFormatOptions = [
   { id: 'yuv420p10le', label: 'yuv420p10le (10-bit)' },
   { id: 'yuv422p10le', label: 'yuv422p10le (10-bit)' },
   { id: 'yuv444p10le', label: 'yuv444p10le (10-bit)' },
+  { id: 'yuv420p12le', label: 'yuv420p12le (12-bit)' },
+  { id: 'yuv422p12le', label: 'yuv422p12le (12-bit)' },
+  { id: 'yuv444p12le', label: 'yuv444p12le (12-bit)' },
+  { id: 'yuv410p', label: 'yuv410p' },
+  { id: 'yuv411p', label: 'yuv411p' },
+  { id: 'yuv440p', label: 'yuv440p' },
   { id: 'nv12', label: 'nv12' },
   { id: 'p010le', label: 'p010le (10-bit)' },
+  { id: 'rgb24', label: 'rgb24' },
+  { id: 'rgba', label: 'rgba' },
+  { id: 'bgr24', label: 'bgr24' },
+  { id: 'bgra', label: 'bgra' },
+  { id: 'rgb444', label: 'rgb444' },
+  { id: 'bgr444', label: 'bgr444' },
+  { id: 'gbrp', label: 'gbrp' },
+  { id: 'gbrp10le', label: 'gbrp10le (10-bit)' },
+  { id: 'gbrp12le', label: 'gbrp12le (12-bit)' },
+  { id: 'gbrap', label: 'gbrap' },
+  { id: 'gray', label: 'gray' },
+  { id: 'gray10le', label: 'gray10le (10-bit)' },
+  { id: 'gray12le', label: 'gray12le (12-bit)' },
+  { id: 'ya8', label: 'ya8 (grayscale + alpha)' },
 ]
+const commonPixelFormatIds = [
+  'yuv420p',
+  'yuv422p',
+  'yuv444p',
+  'yuv420p10le',
+  'nv12',
+  'p010le',
+  'rgb24',
+  'rgba',
+  'gray',
+]
+const moreOptionValue = '__more__'
 
 const theme = createTheme({
   palette: {
@@ -84,6 +116,9 @@ function App() {
   const [selectedCodecId, setSelectedCodecId] = useState('')
   const [selectedExtension, setSelectedExtension] = useState('')
   const [selectedPixelFormat, setSelectedPixelFormat] = useState('')
+  const [showAllPixelFormats, setShowAllPixelFormats] = useState(false)
+  const [pixelMenuOpen, setPixelMenuOpen] = useState(false)
+  const [suppressPixelMenuClose, setSuppressPixelMenuClose] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -109,6 +144,31 @@ function App() {
     return codec ? codec.extensions : []
   }, [selectedCodecId])
 
+  const visiblePixelFormats = useMemo(() => {
+    if (showAllPixelFormats) return pixelFormatOptions
+    const common = pixelFormatOptions.filter((fmt) =>
+      commonPixelFormatIds.includes(fmt.id),
+    )
+    if (
+      selectedPixelFormat &&
+      !common.some((fmt) => fmt.id === selectedPixelFormat)
+    ) {
+      const selected = pixelFormatOptions.find(
+        (fmt) => fmt.id === selectedPixelFormat,
+      )
+      return selected ? [selected, ...common] : common
+    }
+    return common
+  }, [selectedPixelFormat, showAllPixelFormats])
+
+  const keepPixelMenuOpen = () => {
+    setSuppressPixelMenuClose(true)
+    setPixelMenuOpen(true)
+    setTimeout(() => {
+      setPixelMenuOpen(true)
+    }, 0)
+  }
+
   useEffect(() => {
     if (
       selectedCodecId &&
@@ -129,6 +189,16 @@ function App() {
     }
   }, [allowedCodecs, selectedCodecId, selectedExtension])
 
+  const handlePixelFormatChange = (value: string) => {
+    if (value === moreOptionValue) {
+      setShowAllPixelFormats(true)
+      keepPixelMenuOpen()
+      return
+    }
+    setSelectedPixelFormat(value)
+    setPixelMenuOpen(false)
+  }
+
   const handleFileSelect = (file: File | null) => {
     if (!file) return
     setSelectedFile(file)
@@ -148,6 +218,9 @@ function App() {
     setSelectedCodecId('')
     setSelectedExtension('')
     setSelectedPixelFormat('')
+    setShowAllPixelFormats(false)
+    setPixelMenuOpen(false)
+    setSuppressPixelMenuClose(false)
     setIsDragging(false)
   }
 
@@ -316,15 +389,40 @@ function App() {
                     labelId="pixfmt-label"
                     label="ピクセルフォーマット"
                     value={selectedPixelFormat}
+                    open={pixelMenuOpen}
+                    onOpen={() => setPixelMenuOpen(true)}
+                    onClose={() => {
+                      if (suppressPixelMenuClose) {
+                        setSuppressPixelMenuClose(false)
+                        setPixelMenuOpen(true)
+                        return
+                      }
+                      setPixelMenuOpen(false)
+                    }}
                     onChange={(event) =>
-                      setSelectedPixelFormat(event.target.value as string)
+                      handlePixelFormatChange(event.target.value as string)
                     }
                   >
-                    {pixelFormatOptions.map((fmt) => (
+                    {visiblePixelFormats.map((fmt) => (
                       <MenuItem key={fmt.id} value={fmt.id}>
                         {fmt.label}
                       </MenuItem>
                     ))}
+                    {!showAllPixelFormats && (
+                      <MenuItem
+                        value={moreOptionValue}
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          keepPixelMenuOpen()
+                        }}
+                        onClick={() => {
+                          setShowAllPixelFormats(true)
+                          keepPixelMenuOpen()
+                        }}
+                      >
+                        More...
+                      </MenuItem>
+                    )}
                   </Select>
                 </FormControl>
               </Stack>
