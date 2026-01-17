@@ -21,6 +21,7 @@ import {
   Step,
   StepLabel,
   Stepper,
+  TextField,
   ThemeProvider,
   Typography,
   createTheme,
@@ -116,6 +117,8 @@ function App() {
   const [selectedCodecId, setSelectedCodecId] = useState('')
   const [selectedExtension, setSelectedExtension] = useState('')
   const [selectedPixelFormat, setSelectedPixelFormat] = useState('')
+  const [targetWidth, setTargetWidth] = useState('')
+  const [targetHeight, setTargetHeight] = useState('')
   const [showAllPixelFormats, setShowAllPixelFormats] = useState(false)
   const [pixelMenuOpen, setPixelMenuOpen] = useState(false)
   const [suppressPixelMenuClose, setSuppressPixelMenuClose] = useState(false)
@@ -218,6 +221,8 @@ function App() {
     setSelectedCodecId('')
     setSelectedExtension('')
     setSelectedPixelFormat('')
+    setTargetWidth('')
+    setTargetHeight('')
     setShowAllPixelFormats(false)
     setPixelMenuOpen(false)
     setSuppressPixelMenuClose(false)
@@ -231,8 +236,17 @@ function App() {
     const inputName = getFileDisplayName(selectedFile)
     const outputName = getOutputName(inputName, selectedExtension)
     const pixFmt = selectedPixelFormat ? ` -pix_fmt ${selectedPixelFormat}` : ''
-    return `ffmpeg -i "${inputName}" -c:v ${currentCodec.ffmpeg}${pixFmt} -c:a copy "${outputName}"`
-  }, [currentCodec, selectedExtension, selectedFile, selectedPixelFormat])
+    const size =
+      targetWidth && targetHeight ? ` -s ${targetWidth}x${targetHeight}` : ''
+    return `ffmpeg -i "${inputName}" -c:v ${currentCodec.ffmpeg}${pixFmt}${size} -c:a copy "${outputName}"`
+  }, [
+    currentCodec,
+    selectedExtension,
+    selectedFile,
+    selectedPixelFormat,
+    targetHeight,
+    targetWidth,
+  ])
 
   const stepValidations = [
     Boolean(selectedFile),
@@ -425,6 +439,24 @@ function App() {
                     )}
                   </Select>
                 </FormControl>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <TextField
+                    label="幅 (px)"
+                    type="number"
+                    value={targetWidth}
+                    inputProps={{ min: 1 }}
+                    onChange={(event) => setTargetWidth(event.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="高さ (px)"
+                    type="number"
+                    value={targetHeight}
+                    inputProps={{ min: 1 }}
+                    onChange={(event) => setTargetHeight(event.target.value)}
+                    fullWidth
+                  />
+                </Stack>
               </Stack>
             )}
 
