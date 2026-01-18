@@ -3,11 +3,13 @@ import type { DragEvent } from 'react'
 import {
   Box,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
@@ -96,6 +98,7 @@ const getOutputName = (inputName: string, extension: string) => {
 export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps) {
   const [activeStep, setActiveStep] = useState(0)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [copyCodec, setCopyCodec] = useState(true)
   const [selectedCodecId, setSelectedCodecId] = useState('')
   const [selectedExtension, setSelectedExtension] = useState('')
   const [selectedPixelFormat, setSelectedPixelFormat] = useState('')
@@ -140,6 +143,15 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
     }
     return common
   }, [selectedPixelFormat, showAllPixelFormats])
+
+  useEffect(() => {
+    if (!copyCodec) return
+    setSelectedCodecId('')
+    setSelectedPixelFormat('')
+    setTargetWidth('')
+    setTargetHeight('')
+    setPixelMenuOpen(false)
+  }, [copyCodec])
 
   const keepPixelMenuOpen = () => {
     setSuppressPixelMenuClose(true)
@@ -195,6 +207,7 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
     onClose()
     setActiveStep(0)
     setSelectedFile(null)
+    setCopyCodec(false)
     setSelectedCodecId('')
     setSelectedExtension('')
     setSelectedPixelFormat('')
@@ -209,14 +222,22 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
   const currentCodec = codecOptions.find((item) => item.id === selectedCodecId)
 
   const previewCommand = useMemo(() => {
-    if (!selectedFile || !currentCodec || !selectedExtension) return ''
+    if (!selectedFile || !selectedExtension) return ''
+    if (!copyCodec && !currentCodec) return ''
     const inputName = getFileDisplayName(selectedFile)
     const outputName = getOutputName(inputName, selectedExtension)
-    const pixFmt = selectedPixelFormat ? ` -pix_fmt ${selectedPixelFormat}` : ''
+    const videoCodec = copyCodec ? 'copy' : currentCodec?.ffmpeg
+    const pixFmt =
+      !copyCodec && selectedPixelFormat
+        ? ` -pix_fmt ${selectedPixelFormat}`
+        : ''
     const size =
-      targetWidth && targetHeight ? ` -s ${targetWidth}x${targetHeight}` : ''
-    return `ffmpeg -i "${inputName}" -c:v ${currentCodec.ffmpeg}${pixFmt}${size} -c:a copy "${outputName}"`
+      !copyCodec && targetWidth && targetHeight
+        ? ` -s ${targetWidth}x${targetHeight}`
+        : ''
+    return `ffmpeg -i "${inputName}" -c:v ${videoCodec}${pixFmt}${size} "${outputName}"`
   }, [
+    copyCodec,
     currentCodec,
     selectedExtension,
     selectedFile,
@@ -227,7 +248,7 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
 
   const stepValidations = [
     Boolean(selectedFile),
-    Boolean(selectedCodecId),
+    copyCodec || Boolean(selectedCodecId),
     Boolean(selectedExtension),
   ]
 
@@ -292,12 +313,22 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
 
           {activeStep === 1 && (
             <Stack spacing={2}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={copyCodec}
+                    onChange={(event) => setCopyCodec(event.target.checked)}
+                  />
+                }
+                label="変換コーデックをコピーする"
+              />
               <FormControl fullWidth>
                 <InputLabel id="codec-label">変換コーデック</InputLabel>
                 <Select
                   labelId="codec-label"
                   label="変換コーデック"
                   value={selectedCodecId}
+                  disabled={copyCodec}
                   onChange={(event) =>
                     setSelectedCodecId(event.target.value as string)
                   }
@@ -316,6 +347,7 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
                   label="ピクセルフォーマット"
                   value={selectedPixelFormat}
                   open={pixelMenuOpen}
+                  disabled={copyCodec}
                   onOpen={() => setPixelMenuOpen(true)}
                   onClose={() => {
                     if (suppressPixelMenuClose) {
@@ -358,6 +390,7 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
                   value={targetWidth}
                   inputProps={{ min: 1 }}
                   onChange={(event) => setTargetWidth(event.target.value)}
+                  disabled={copyCodec}
                   fullWidth
                 />
                 <TextField
@@ -366,6 +399,7 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
                   value={targetHeight}
                   inputProps={{ min: 1 }}
                   onChange={(event) => setTargetHeight(event.target.value)}
+                  disabled={copyCodec}
                   fullWidth
                 />
               </Stack>
