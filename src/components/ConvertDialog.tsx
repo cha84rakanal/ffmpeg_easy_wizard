@@ -12,6 +12,7 @@ import {
   FormControlLabel,
   InputLabel,
   MenuItem,
+  IconButton,
   Paper,
   Select,
   Stack,
@@ -22,6 +23,7 @@ import {
   Typography,
 } from '@mui/material'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { codecOptions } from '../codecOptions'
 
 type ConvertDialogProps = {
@@ -107,6 +109,7 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
   const [showAllPixelFormats, setShowAllPixelFormats] = useState(false)
   const [pixelMenuOpen, setPixelMenuOpen] = useState(false)
   const [suppressPixelMenuClose, setSuppressPixelMenuClose] = useState(false)
+  const [copySuccess, setCopySuccess] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -216,6 +219,7 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
     setShowAllPixelFormats(false)
     setPixelMenuOpen(false)
     setSuppressPixelMenuClose(false)
+    setCopySuccess(false)
     setIsDragging(false)
   }
 
@@ -254,6 +258,17 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
 
   const isLastStep = activeStep === steps.length - 1
   const canProceed = stepValidations[activeStep]
+
+  const handleCopyCommand = async () => {
+    if (!previewCommand) return
+    try {
+      await navigator.clipboard.writeText(previewCommand)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 1600)
+    } catch {
+      setCopySuccess(false)
+    }
+  }
 
   return (
     <Dialog open={open} onClose={handleDialogClose} fullWidth maxWidth="sm">
@@ -427,7 +442,21 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
               </FormControl>
               {previewCommand && (
                 <Paper className="command-preview" elevation={0}>
-                  <Typography variant="subtitle2">生成コマンド</Typography>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Typography variant="subtitle2">生成コマンド</Typography>
+                    <IconButton
+                      size="small"
+                      onClick={handleCopyCommand}
+                      aria-label="コマンドをコピー"
+                    >
+                      <ContentCopyIcon fontSize="inherit" />
+                    </IconButton>
+                    {copySuccess && (
+                      <Typography variant="caption" color="text.secondary">
+                        コピーしました
+                      </Typography>
+                    )}
+                  </Stack>
                   <Typography variant="body2" className="mono">
                     {previewCommand}
                   </Typography>
