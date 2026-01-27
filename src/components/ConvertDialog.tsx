@@ -441,7 +441,7 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
                 </Select>
               </FormControl>
               {previewCommand && (
-                <Paper className="command-preview" elevation={0}>
+                <Stack spacing={1}>
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <Typography variant="subtitle2">生成コマンド</Typography>
                     <IconButton
@@ -457,10 +457,12 @@ export function ConvertDialog({ open, onClose, onComplete }: ConvertDialogProps)
                       </Typography>
                     )}
                   </Stack>
-                  <Typography variant="body2" className="mono">
-                    {previewCommand}
-                  </Typography>
-                </Paper>
+                  <Paper className="command-preview" elevation={0}>
+                    <Typography variant="body2" className="mono">
+                      {previewCommand}
+                    </Typography>
+                  </Paper>
+                </Stack>
               )}
             </Stack>
           )}
