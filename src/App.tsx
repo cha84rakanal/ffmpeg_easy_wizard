@@ -4,6 +4,11 @@ import { ConvertDialog } from './components/ConvertDialog'
 import { HomePage } from './components/HomePage'
 import './App.css'
 
+export type CommandHistoryItem = {
+  command: string
+  createdAt: string
+}
+
 const theme = createTheme({
   palette: {
     mode: 'light',
@@ -22,9 +27,15 @@ const theme = createTheme({
 
 function App() {
   const [convertOpen, setConvertOpen] = useState(false)
-  const [history, setHistory] = useState<string[]>([
-    'ffmpeg -i "sample.mov" -c:v libx264 -c:a copy sample.mp4',
-    'ffmpeg -i "demo.mkv" -c:v libvpx-vp9 -c:a libopus demo.webm',
+  const [history, setHistory] = useState<CommandHistoryItem[]>([
+    {
+      command: 'ffmpeg -i "sample.mov" -c:v libx264 -c:a copy sample.mp4',
+      createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    },
+    {
+      command: 'ffmpeg -i "demo.mkv" -c:v libvpx-vp9 -c:a libopus demo.webm',
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+    },
   ])
 
   return (
@@ -35,7 +46,12 @@ function App() {
         open={convertOpen}
         onClose={() => setConvertOpen(false)}
         onComplete={(command) =>
-          setHistory((prev) => [command, ...prev].slice(0, 10))
+          setHistory((prev) =>
+            [
+              { command, createdAt: new Date().toISOString() },
+              ...prev,
+            ].slice(0, 10),
+          )
         }
       />
     </ThemeProvider>

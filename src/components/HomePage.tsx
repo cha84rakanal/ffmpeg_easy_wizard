@@ -1,7 +1,10 @@
+import { Fragment } from 'react'
 import {
-  Box,
   Button,
   Chip,
+  Box,
+  Divider,
+  IconButton,
   List,
   ListItem,
   ListItemText,
@@ -10,16 +13,32 @@ import {
   Typography,
 } from '@mui/material'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import MovieFilterIcon from '@mui/icons-material/MovieFilter'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import HistoryIcon from '@mui/icons-material/History'
+import type { CommandHistoryItem } from '../App'
 
 type HomePageProps = {
-  history: string[]
+  history: CommandHistoryItem[]
   onOpenConvert: () => void
 }
 
 export function HomePage({ history, onOpenConvert }: HomePageProps) {
+  const handleCopy = async (command: string) => {
+    try {
+      await navigator.clipboard.writeText(command)
+    } catch {
+      // Clipboard access can fail on some browsers or insecure contexts.
+    }
+  }
+
+  const formatCreatedAt = (iso: string) => {
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) return iso
+    return date.toLocaleString()
+  }
+
   return (
     <Box className="app-shell">
       <Box className="hero">
@@ -66,11 +85,43 @@ export function HomePage({ history, onOpenConvert }: HomePageProps) {
           </Stack>
           <Chip size="small" label={`${history.length} 件`} />
         </Box>
-        <List dense>
+        <List dense disablePadding>
+          <ListItem
+            className="history-row history-header-row"
+            sx={{ pl: 3, pr: 10 }}
+          >
+            <ListItemText
+              primary="Command"
+              secondary="Created Time"
+              primaryTypographyProps={{ variant: 'subtitle2' }}
+              secondaryTypographyProps={{ variant: 'caption' }}
+            />
+          </ListItem>
+          <Divider component="li" />
           {history.map((item, index) => (
-            <ListItem key={`${item}-${index}`}>
-              <ListItemText primary={item} />
-            </ListItem>
+            <Fragment key={`${item.command}-${item.createdAt}-${index}`}>
+              <ListItem
+                className="history-row"
+                sx={{ pl: 3, pr: 10 }}
+                secondaryAction={
+                  <IconButton
+                    edge="end"
+                    aria-label="コマンドをコピー"
+                    onClick={() => handleCopy(item.command)}
+                  >
+                    <ContentCopyIcon />
+                  </IconButton>
+                }
+              >
+                <ListItemText
+                  primary={item.command}
+                  secondary={formatCreatedAt(item.createdAt)}
+                  primaryTypographyProps={{ className: 'mono' }}
+                  secondaryTypographyProps={{ variant: 'caption' }}
+                />
+              </ListItem>
+              {index < history.length - 1 && <Divider component="li" />}
+            </Fragment>
           ))}
         </List>
       </Paper>
