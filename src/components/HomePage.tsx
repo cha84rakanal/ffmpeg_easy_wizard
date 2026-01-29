@@ -22,9 +22,10 @@ import type { CommandHistoryItem } from '../App'
 type HomePageProps = {
   history: CommandHistoryItem[]
   onOpenConvert: () => void
+  onOpenEdit: () => void
 }
 
-export function HomePage({ history, onOpenConvert }: HomePageProps) {
+export function HomePage({ history, onOpenConvert, onOpenEdit }: HomePageProps) {
   const handleCopy = async (command: string) => {
     try {
       await navigator.clipboard.writeText(command)
@@ -65,7 +66,9 @@ export function HomePage({ history, onOpenConvert }: HomePageProps) {
           <Typography className="action-copy">
             切り出し・フィルター・速度調整などを順番に追加します。
           </Typography>
-          <Button variant="outlined">準備中</Button>
+          <Button variant="outlined" onClick={onOpenEdit}>
+            トリムを開く
+          </Button>
         </Paper>
         <Paper className="action-card tone-build" elevation={0}>
           <TerminalIcon fontSize="large" />
