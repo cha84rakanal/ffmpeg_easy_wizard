@@ -38,9 +38,16 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
   const [endTime, setEndTime] = useState('')
   const [duration, setDuration] = useState(0)
   const [range, setRange] = useState<[number, number]>([0, 0])
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [isScrubbing, setIsScrubbing] = useState(false)
+  const [previewTime, setPreviewTime] = useState(0)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const previewRequestRef = useRef(0)
+  const previousUrlRef = useRef<string | null>(null)
 
   const handleFileSelect = (file: File | null) => {
     if (!file) return
@@ -61,47 +68,36 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
     setEndTime('')
     setDuration(0)
     setRange([0, 0])
+    setVideoUrl(null)
+    setIsScrubbing(false)
+    setPreviewTime(0)
+    setPreviewImage(null)
     setIsDragging(false)
+    if (previousUrlRef.current) {
+      URL.revokeObjectURL(previousUrlRef.current)
+      previousUrlRef.current = null
+    }
   }
 
   useEffect(() => {
+    if (previousUrlRef.current) {
+      URL.revokeObjectURL(previousUrlRef.current)
+      previousUrlRef.current = null
+    }
+
     if (!selectedFile) {
       setDuration(0)
       setRange([0, 0])
+      setVideoUrl(null)
       return
     }
 
     const url = URL.createObjectURL(selectedFile)
-    const video = document.createElement('video')
-    video.preload = 'metadata'
-    video.src = url
-
-    const handleLoaded = () => {
-      const nextDuration = Number.isFinite(video.duration)
-        ? Math.max(0, video.duration)
-        : 0
-      setDuration(nextDuration)
-      const clampedEnd = nextDuration > 0 ? nextDuration : 0
-      setRange([0, clampedEnd])
-      setStartTime('0')
-      setEndTime(clampedEnd.toFixed(2))
-      URL.revokeObjectURL(url)
-    }
-
-    const handleError = () => {
-      setDuration(0)
-      setRange([0, 0])
-      URL.revokeObjectURL(url)
-    }
-
-    video.addEventListener('loadedmetadata', handleLoaded, { once: true })
-    video.addEventListener('error', handleError, { once: true })
-
-    return () => {
-      video.removeEventListener('loadedmetadata', handleLoaded)
-      video.removeEventListener('error', handleError)
-      URL.revokeObjectURL(url)
-    }
+    previousUrlRef.current = url
+    setVideoUrl(url)
+    setPreviewImage(null)
+    setIsScrubbing(false)
+    setPreviewTime(0)
   }, [selectedFile])
 
   useEffect(() => {
@@ -110,6 +106,51 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
     setStartTime(start.toFixed(2))
     setEndTime(end.toFixed(2))
   }, [duration, range])
+
+  const requestPreviewFrame = (time: number) => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas || !duration) return
+    const clamped = Math.min(Math.max(time, 0), duration)
+    const requestId = previewRequestRef.current + 1
+    previewRequestRef.current = requestId
+
+    const handleSeeked = () => {
+      if (previewRequestRef.current !== requestId) return
+      const context = canvas.getContext('2d')
+      if (!context) return
+      const width = 320
+      const height = 180
+      canvas.width = width
+      canvas.height = height
+      const sourceWidth = video.videoWidth || width
+      const sourceHeight = video.videoHeight || height
+      const sourceRatio = sourceWidth / sourceHeight
+      const targetRatio = width / height
+      let sx = 0
+      let sy = 0
+      let sWidth = sourceWidth
+      let sHeight = sourceHeight
+
+      if (sourceRatio > targetRatio) {
+        sWidth = Math.round(sourceHeight * targetRatio)
+        sx = Math.round((sourceWidth - sWidth) / 2)
+      } else if (sourceRatio < targetRatio) {
+        sHeight = Math.round(sourceWidth / targetRatio)
+        sy = Math.round((sourceHeight - sHeight) / 2)
+      }
+
+      context.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, width, height)
+      setPreviewImage(canvas.toDataURL('image/jpeg', 0.75))
+    }
+
+    video.addEventListener('seeked', handleSeeked, { once: true })
+    try {
+      video.currentTime = clamped
+    } catch {
+      video.removeEventListener('seeked', handleSeeked)
+    }
+  }
 
   const previewCommand = useMemo(() => {
     if (!selectedFile || !startTime || !endTime) return ''
@@ -122,10 +163,38 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
   const canComplete = Boolean(selectedFile && startTime && endTime)
 
   return (
-    <Dialog open={open} onClose={handleDialogClose} fullWidth maxWidth="sm">
+    <Dialog
+      open={open}
+      onClose={handleDialogClose}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{ sx: { overflow: 'visible' } }}
+    >
       <DialogTitle>動画を加工する（トリム）</DialogTitle>
-      <DialogContent dividers>
+      <DialogContent dividers sx={{ overflow: 'visible' }}>
         <Stack spacing={3}>
+          <video
+            ref={videoRef}
+            src={videoUrl ?? undefined}
+            preload="metadata"
+            style={{ display: 'none' }}
+            onLoadedMetadata={(event) => {
+              const target = event.currentTarget
+              const nextDuration = Number.isFinite(target.duration)
+                ? Math.max(0, target.duration)
+                : 0
+              setDuration(nextDuration)
+              const clampedEnd = nextDuration > 0 ? nextDuration : 0
+              setRange([0, clampedEnd])
+              setStartTime('0')
+              setEndTime(clampedEnd.toFixed(2))
+            }}
+            onError={() => {
+              setDuration(0)
+              setRange([0, 0])
+            }}
+          />
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
           <Box
             className={`drop-zone ${isDragging ? 'is-dragging' : ''}`}
             onDragOver={(event) => {
@@ -184,17 +253,48 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
 
           <Stack spacing={1}>
             <Typography variant="subtitle2">トリム範囲</Typography>
-            <Slider
-              value={range}
-              onChange={(_, value) =>
-                Array.isArray(value) && setRange([value[0], value[1]])
-              }
-              min={0}
-              max={duration || 0}
-              step={0.01}
-              valueLabelDisplay="auto"
-              disabled={!duration}
-            />
+            <Box sx={{ position: 'relative', px: 1 }}>
+              {isScrubbing && previewImage && duration > 0 && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: `${(previewTime / duration) * 100}%`,
+                    top: -230,
+                    transform: 'translateX(-50%)',
+                    width: 320,
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    boxShadow: '0 12px 24px rgba(0,0,0,0.18)',
+                    border: '1px solid rgba(15, 23, 42, 0.2)',
+                    background: '#0f172a',
+                    zIndex: 2,
+                  }}
+                >
+                  <img
+                    src={previewImage}
+                    alt="preview"
+                    style={{ display: 'block', width: '100%', height: 'auto' }}
+                  />
+                </Box>
+              )}
+              <Slider
+                value={range}
+                onChange={(_, value, activeThumb) => {
+                  if (!Array.isArray(value)) return
+                  setRange([value[0], value[1]])
+                  setIsScrubbing(true)
+                  const nextTime = value[activeThumb]
+                  setPreviewTime(nextTime)
+                  requestPreviewFrame(nextTime)
+                }}
+                onChangeCommitted={() => setIsScrubbing(false)}
+                min={0}
+                max={duration || 0}
+                step={0.01}
+                valueLabelDisplay="auto"
+                disabled={!duration}
+              />
+            </Box>
             <Typography variant="caption" color="text.secondary">
               再生時間: {duration ? `${duration.toFixed(2)}s` : '未取得'}
             </Typography>
