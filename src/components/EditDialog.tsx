@@ -31,6 +31,7 @@ const getFileDisplayName = (file: File | null) => {
 }
 
 const normalizeTime = (value: string) => value.trim()
+const previewFixedTimeSeconds = 0.08
 
 export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -42,6 +43,7 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
   const [isScrubbing, setIsScrubbing] = useState(false)
   const [previewTime, setPreviewTime] = useState(0)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [fixedPreviewImage, setFixedPreviewImage] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -72,6 +74,7 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
     setIsScrubbing(false)
     setPreviewTime(0)
     setPreviewImage(null)
+    setFixedPreviewImage(null)
     setIsDragging(false)
     if (previousUrlRef.current) {
       URL.revokeObjectURL(previousUrlRef.current)
@@ -96,8 +99,9 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
     previousUrlRef.current = url
     setVideoUrl(url)
     setPreviewImage(null)
+    setFixedPreviewImage(null)
     setIsScrubbing(false)
-    setPreviewTime(0)
+    setPreviewTime(previewFixedTimeSeconds)
   }, [selectedFile])
 
   useEffect(() => {
@@ -107,11 +111,18 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
     setEndTime(end.toFixed(2))
   }, [duration, range])
 
-  const requestPreviewFrame = (time: number) => {
+  const requestPreviewFrame = (
+    time: number,
+    onResult: (dataUrl: string) => void,
+  ) => {
     const video = videoRef.current
     const canvas = canvasRef.current
-    if (!video || !canvas || !duration) return
-    const clamped = Math.min(Math.max(time, 0), duration)
+    if (!video || !canvas) return
+    const effectiveDuration = Number.isFinite(video.duration)
+      ? Math.max(0, video.duration)
+      : duration
+    if (!effectiveDuration) return
+    const clamped = Math.min(Math.max(time, 0), effectiveDuration)
     const requestId = previewRequestRef.current + 1
     previewRequestRef.current = requestId
 
@@ -141,7 +152,12 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
       }
 
       context.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, width, height)
-      setPreviewImage(canvas.toDataURL('image/jpeg', 0.75))
+      onResult(canvas.toDataURL('image/jpeg', 0.9))
+    }
+
+    if (Math.abs(video.currentTime - clamped) < 0.01 && video.readyState >= 2) {
+      handleSeeked()
+      return
     }
 
     video.addEventListener('seeked', handleSeeked, { once: true })
@@ -188,6 +204,10 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
               setRange([0, clampedEnd])
               setStartTime('0')
               setEndTime(clampedEnd.toFixed(2))
+              setPreviewTime(previewFixedTimeSeconds)
+            }}
+            onLoadedData={() => {
+              requestPreviewFrame(previewFixedTimeSeconds, setFixedPreviewImage)
             }}
             onError={() => {
               setDuration(0)
@@ -235,6 +255,19 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
               </Box>
             )}
           </Box>
+
+          {fixedPreviewImage && (
+            <Stack spacing={1}>
+              <Typography variant="subtitle2">プレビュー</Typography>
+              <Paper className="command-preview" elevation={0}>
+                <img
+                  src={fixedPreviewImage}
+                  alt="thumbnail"
+                  style={{ display: 'block', width: '100%', height: 'auto' }}
+                />
+              </Paper>
+            </Stack>
+          )}
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
@@ -285,9 +318,13 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
                   setIsScrubbing(true)
                   const nextTime = value[activeThumb]
                   setPreviewTime(nextTime)
-                  requestPreviewFrame(nextTime)
+                  requestPreviewFrame(nextTime, setPreviewImage)
                 }}
                 onChangeCommitted={() => setIsScrubbing(false)}
+                onMouseDown={() => setIsScrubbing(true)}
+                onMouseUp={() => setIsScrubbing(false)}
+                onTouchStart={() => setIsScrubbing(true)}
+                onTouchEnd={() => setIsScrubbing(false)}
                 min={0}
                 max={duration || 0}
                 step={0.01}
