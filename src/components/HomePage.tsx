@@ -66,7 +66,7 @@ export function HomePage({ history, onOpenConvert, onOpenEdit }: HomePageProps) 
           <Typography className="action-copy">
             切り出し・フィルター・速度調整などを順番に追加します。
           </Typography>
-          <Button variant="outlined" onClick={onOpenEdit}>
+          <Button variant="contained" onClick={onOpenEdit}>
             トリムを開く
           </Button>
         </Paper>
