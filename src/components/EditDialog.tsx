@@ -7,12 +7,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Paper,
   Slider,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
+import PauseIcon from '@mui/icons-material/Pause'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 
 type EditDialogProps = {
@@ -43,7 +46,10 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
   const [isScrubbing, setIsScrubbing] = useState(false)
   const [previewTime, setPreviewTime] = useState(0)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
-  const [fixedPreviewImage, setFixedPreviewImage] = useState<string | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [playbackTime, setPlaybackTime] = useState(0)
+  const [playbackDuration, setPlaybackDuration] = useState(0)
+  const [frameRate, setFrameRate] = useState(30)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -74,8 +80,14 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
     setIsScrubbing(false)
     setPreviewTime(0)
     setPreviewImage(null)
-    setFixedPreviewImage(null)
+    setIsPlaying(false)
+    setPlaybackTime(0)
+    setPlaybackDuration(0)
     setIsDragging(false)
+    if (videoRef.current) {
+      videoRef.current.pause()
+      videoRef.current.currentTime = 0
+    }
     if (previousUrlRef.current) {
       URL.revokeObjectURL(previousUrlRef.current)
       previousUrlRef.current = null
@@ -99,9 +111,11 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
     previousUrlRef.current = url
     setVideoUrl(url)
     setPreviewImage(null)
-    setFixedPreviewImage(null)
     setIsScrubbing(false)
     setPreviewTime(previewFixedTimeSeconds)
+    setIsPlaying(false)
+    setPlaybackTime(0)
+    setPlaybackDuration(0)
   }, [selectedFile])
 
   useEffect(() => {
@@ -178,6 +192,45 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
 
   const canComplete = Boolean(selectedFile && startTime && endTime)
 
+  const formatTime = (seconds: number) => {
+    if (!Number.isFinite(seconds)) return '0:00'
+    const total = Math.max(0, Math.floor(seconds))
+    const mins = Math.floor(total / 60)
+    const secs = total % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const formatTimecode = (seconds: number) => {
+    if (!Number.isFinite(seconds)) return '00:00:00:00'
+    const totalFrames = Math.floor(seconds * frameRate)
+    const frames = totalFrames % frameRate
+    const totalSeconds = Math.floor(totalFrames / frameRate)
+    const s = totalSeconds % 60
+    const totalMinutes = Math.floor(totalSeconds / 60)
+    const m = totalMinutes % 60
+    const h = Math.floor(totalMinutes / 60)
+    return `${h.toString().padStart(2, '0')}:${m
+      .toString()
+      .padStart(2, '0')}:${s.toString().padStart(2, '0')}:${frames
+      .toString()
+      .padStart(2, '0')}`
+  }
+
+  const formatFrames = (seconds: number) => {
+    if (!Number.isFinite(seconds)) return '0'
+    return Math.floor(seconds * frameRate).toString()
+  }
+
+  const togglePlay = () => {
+    const video = videoRef.current
+    if (!video) return
+    if (video.paused) {
+      void video.play()
+    } else {
+      video.pause()
+    }
+  }
+
   return (
     <Dialog
       open={open}
@@ -189,31 +242,6 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
       <DialogTitle>動画を加工する（トリム）</DialogTitle>
       <DialogContent dividers sx={{ overflow: 'visible' }}>
         <Stack spacing={3}>
-          <video
-            ref={videoRef}
-            src={videoUrl ?? undefined}
-            preload="metadata"
-            style={{ display: 'none' }}
-            onLoadedMetadata={(event) => {
-              const target = event.currentTarget
-              const nextDuration = Number.isFinite(target.duration)
-                ? Math.max(0, target.duration)
-                : 0
-              setDuration(nextDuration)
-              const clampedEnd = nextDuration > 0 ? nextDuration : 0
-              setRange([0, clampedEnd])
-              setStartTime('0')
-              setEndTime(clampedEnd.toFixed(2))
-              setPreviewTime(previewFixedTimeSeconds)
-            }}
-            onLoadedData={() => {
-              requestPreviewFrame(previewFixedTimeSeconds, setFixedPreviewImage)
-            }}
-            onError={() => {
-              setDuration(0)
-              setRange([0, 0])
-            }}
-          />
           <canvas ref={canvasRef} style={{ display: 'none' }} />
           <Box
             className={`drop-zone ${isDragging ? 'is-dragging' : ''}`}
@@ -256,15 +284,70 @@ export function EditDialog({ open, onClose, onComplete }: EditDialogProps) {
             )}
           </Box>
 
-          {fixedPreviewImage && (
+          {videoUrl && (
             <Stack spacing={1}>
               <Typography variant="subtitle2">プレビュー</Typography>
               <Paper className="command-preview" elevation={0}>
-                <img
-                  src={fixedPreviewImage}
-                  alt="thumbnail"
+                <video
+                  src={videoUrl}
+                  ref={videoRef}
+                  controls={false}
+                  preload="metadata"
                   style={{ display: 'block', width: '100%', height: 'auto' }}
+                  onLoadedMetadata={(event) => {
+                    const target = event.currentTarget
+                    const nextDuration = Number.isFinite(target.duration)
+                      ? Math.max(0, target.duration)
+                      : 0
+                    setDuration(nextDuration)
+                    setPlaybackDuration(nextDuration)
+                    setFrameRate(30)
+                    const clampedEnd = nextDuration > 0 ? nextDuration : 0
+                    setRange([0, clampedEnd])
+                    setStartTime('0')
+                    setEndTime(clampedEnd.toFixed(2))
+                    setPreviewTime(previewFixedTimeSeconds)
+                  }}
+                  onTimeUpdate={(event) =>
+                    setPlaybackTime(event.currentTarget.currentTime)
+                  }
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => setIsPlaying(false)}
+                  onError={() => {
+                    setDuration(0)
+                    setRange([0, 0])
+                    setPlaybackDuration(0)
+                  }}
                 />
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 1 }}>
+                  <IconButton onClick={togglePlay} aria-label="再生/一時停止">
+                    {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+                  </IconButton>
+                  <Stack spacing={0.25}>
+                    <Typography variant="caption">
+                      {formatTime(playbackTime)} / {formatTime(playbackDuration)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      TC {formatTimecode(playbackTime)} · Frame{' '}
+                      {formatFrames(playbackTime)}
+                    </Typography>
+                  </Stack>
+                  <Slider
+                    value={playbackTime}
+                    min={0}
+                    max={playbackDuration || 0}
+                    step={0.01}
+                    onChange={(_, value) => {
+                      if (typeof value !== 'number') return
+                      setPlaybackTime(value)
+                      const video = videoRef.current
+                      if (video) {
+                        video.currentTime = value
+                      }
+                    }}
+                  />
+                </Stack>
               </Paper>
             </Stack>
           )}
